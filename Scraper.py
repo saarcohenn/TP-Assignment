@@ -4,8 +4,15 @@ import time
 from bs4 import BeautifulSoup
 from  selenium import webdriver
 
-def running_function(func):
 
+def show_current_running_function(func):
+    """
+        Summary: The following method is a Decorator for showing the current 
+                 running function
+        input:   func -> reference to a function to
+        output:  a wrapper_func that get's the original function call arguments
+                 and return the the original return value
+    """
     def wrapper_func(*args, **kwargs):
         # Do something before the function.
         print(f"<--- Starting {func.__name__} Function --->\n")
@@ -15,47 +22,65 @@ def running_function(func):
         return ret_val
     return wrapper_func
 
-@running_function
-def get_site_url(site_name):
-    devided_url = re.split(r"/", site_name)
-    
+def get_site_url(input_url):
+    """
+        Summary: This method extracts the clean url (domain name and postfix)
+        
+        input:  input_url -> the original url page
+        output: full_url -> the site domain url (clean url)
+    """
+    devided_url = re.split(r"/", input_url)
     full_url = "https://"
     for part in devided_url:
         if part != "https:" and part != "http:" and part != '':
             full_url += part + "/"
             break
-    print(full_url)
     return full_url
 
-@running_function
 def get_logo_url(page_source, url):
+    """
+        Summary: This method extract the logo url from a given site 
+        
+        input:  page_source -> the original page source
+                url -> the original url page     
+        output: logo_url -> The logo url
+    """
     soup = BeautifulSoup(page_source, 'html.parser')
     img_elem = soup.find('img')
-    src_url = img_elem['src']
+    logo_url = img_elem['src']
 
-    if url not in src_url and img_elem['src'].startswith("//"):
-        src_url = "https:" + src_url
-    elif url not in src_url and img_elem['src'].startswith("/"):
-        src_url = url + src_url
+    if url not in logo_url and img_elem['src'].startswith("//"):
+        logo_url = "https:" + logo_url
+    elif url not in logo_url and img_elem['src'].startswith("/"):
+        logo_url = url + logo_url
+    return logo_url
 
-    print("Logo URL:", src_url)
-    return src_url
-
-@running_function
 def get_site_phones(page_source):
+    """
+        Summary: This method extract all phone numbers from a given site
+        
+        input:  page_source -> the original page source
+        output: phones -> list of the founded phone numbers
+    """
     phones = []
     soup = BeautifulSoup(page_source, 'html.parser')
-    p_elems = soup.find_all('p')
+    tags = soup.find_all(['p', 'span', 'a'])
 
-    for p in p_elems:
-        # re_phone = re.findall(r"(\+)?(\(\d{1,3}\)|\d{1,3})(\D\d{2,4}){2,3}", p.text)
-        re_phone = re.search(r"(\+)?(\(\d{1,3}\)|\d{1,3})(\D\d{2,4}){2,3}", p.text)
-        if re_phone:
-            print(re_phone.group())
-            phones.append(parsePhoneNumber(re_phone.group()))
-    print(phones)
+    for tag in tags:
+        match_phone = re.search(r"(\+)?(\d{1,3}\D{1,3})?(\(\d{1,3}\)|\d{1,3})(\D\d{2,4}){2,4}", tag.text)
+        if match_phone:
+            phoneNum = parsePhoneNumber(match_phone.group())
+            if phoneNum not in phones:
+                phones.append(phoneNum)
+    return phones
 
 def parsePhoneNumber(number):
+    """
+        Summary: This method light clean a given phone number
+
+        input:  number -> original phone number
+        output: new_number -> new and clean phone number
+    """
     if not number.startswith("+"):
         number = "+" + number
 
@@ -68,8 +93,15 @@ def parsePhoneNumber(number):
             new_number += ' '
     return new_number
 
-@running_function
 def selenium_scrape(sites=None):
+    """
+        Summary: This method is in charge of the main loop of all the given websites.
+                 It's purpose is to  get all the information needen and create a new dictionary 
+                 which will contain the data and the print it as requested
+        
+        input:  sites -> a given list of websites
+        output: new_number -> new and clean phone number
+    """
     chromedriver_path = "./chromedriver"
     driver = webdriver.Chrome(executable_path=chromedriver_path)
     try:
@@ -82,13 +114,14 @@ def selenium_scrape(sites=None):
                 driver.switch_to.window(f"{i}tab")
 
             driver.get(site)
-            url = get_site_url(site)
-            logo_url = get_logo_url(driver.page_source, url)
+            url = site.strip("\n")
+            site_url = get_site_url(url)
+            logo_url = get_logo_url(driver.page_source, site_url)
             phones_list = get_site_phones(driver.page_source)
             site_data = {
                 "logo": logo_url,
                 "phones": phones_list,
-                "website": site
+                "website": url
             }
             print(site_data)
             time.sleep(1)
@@ -110,11 +143,14 @@ def welcome_message():
 if __name__ == '__main__':
     welcome_message()
     sites = []
+
+    # FOR STREAM
     for line in sys.stdin:
         sites.append(line.strip("\n"))
 
+    # FOR DEBUG
     # with open("websites.txt") as f: 
-    #     sites = f.readlines() 
+        # sites = f.readlines() 
     
     print(sites)
     selenium_scrape(sites)
